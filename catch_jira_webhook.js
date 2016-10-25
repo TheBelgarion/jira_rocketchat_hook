@@ -107,7 +107,7 @@ class Script {
                                 });
                                 break;
 
-                            case 'jira:timeestimates':
+                            case 'jira:timeestimate':
                                 attachment.fields.push({
                                     title: 'estimation',
                                     value: issue.fields.timeestimate,
