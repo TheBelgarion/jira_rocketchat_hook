@@ -3,8 +3,9 @@
  *
  * @version: 1.0
  * @summary: script to setup an incoming webhook in rocket.chat for jira export webhook
+ * @link : https://github.com/TheBelgarion/jira_rocketchat_hook
  *
- * * jshint  esnext:true
+ * jshint  esnext:true
  *
  */
 class Script {
