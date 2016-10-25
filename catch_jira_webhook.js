@@ -1,11 +1,10 @@
 /**
  * @author TheBelgarion@github
  *
- * @version: 1.0
+ * @version: 1.01
  * @summary: script to setup an incoming webhook in rocket.chat for jira export webhook
- * @link : https://github.com/TheBelgarion/jira_rocketchat_hook
  *
- * jshint  esnext:true
+ * * jshint  esnext:true
  *
  */
 class Script {
@@ -18,10 +17,16 @@ class Script {
                 }
             };
         }
+
         const DEBUG = true;
         const MAXLENGTH = 500;
-        try {
 
+        let channel = false;
+
+        if (request.url.query.channel != '') {
+            channel = '#' + request.url.query.channel;
+        }
+        try {
             let issue = request.content.issue;
             let comment = request.content.comment;
             let ref_url = issue.self;
@@ -107,12 +112,22 @@ class Script {
                                 });
                                 break;
 
-                            case 'jira:timeestimate':
+                            case 'custom:sprint':
                                 attachment.fields.push({
-                                    title: 'estimation',
-                                    value: issue.fields.timeestimate,
+                                    title: item.item.field,
+                                    value: 'changed' + item.item.fromString + ' to ' + item.item.toString,
                                     short: true
                                 });
+                                break;
+
+                            case 'jira:fix version':
+                                if (item.item.toString != '') {
+                                    attachment.fields.push({
+                                        title: item.item.field,
+                                        value: item.item.toString,
+                                        short: true
+                                    });
+                                }
                                 break;
 
                             case 'jira:priority':
@@ -142,13 +157,16 @@ class Script {
                                 });
                                 break;
 
+                            case 'jira:summary':
+                                // summary already shown
+                                break;
                             // ignored actions
+                            case 'jira:timeestimate':
                             case 'jira:timespent':
                             case 'jira:worklogid':
                             case 'custom:lest link':
                             case 'custom:epic status':
                             case 'custom:rank':
-                            case 'jira.summary':
                                 if (DEBUG) {
                                     attachment.fields.push({
                                         title: 'ignored action',
@@ -203,7 +221,7 @@ class Script {
                 attachment = {
                     author_icon: comment.author.avatarUrls['48x48'],
                     author_name: comment.author.displayName + ' added a comment',
-                    text: this.maxLength(comment.body, MAXLENGTH)
+                    text: this.comment(comment.body, MAXLENGTH)
                 };
                 attachments.push(attachment);
 
@@ -221,13 +239,19 @@ class Script {
         if (DEBUG) {
             console.log(JSON.stringify(request.content));
         }
-        return {
+        var result = {
             content: {
                 alias: 'JIRA',
                 text: text,
-                attachments: attachments
+                attachments: attachments,
+                link_names: true
             }
         };
+        // send to other channel than predefined on script
+        if (channel) {
+            result.content.channel = channel;
+        }
+        return result;
     }
 
     get_action_items(request) {
@@ -281,11 +305,13 @@ class Script {
         return users;
     }
 
-    maxLength(text, length) {
+    comment(text, length) {
         if (text.length > length) {
             let s = text.substr(0, length - 1);
             text = text.substr(0, s.lastIndexOf(' ')) + '\n...';
         }
+        // link users only works correct with you use same user e.g. LDAP on JIRA and Rocketchat
+        text = text.replace(/(\[\~)(\w\.\w*)(\])/g, "@$2");
         return text;
     }
 }
