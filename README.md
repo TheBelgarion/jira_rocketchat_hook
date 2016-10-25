@@ -1,6 +1,6 @@
-# jira_rocketchat_hook
+# JIRA Rocket.chat webhook
 
-incoming webhook for jira integarion
+incoming webhook for jira integarion with rocket.chat
 
 some actions depend on your installation and might not work for you, mostly 'custom:*'
 
@@ -8,3 +8,6 @@ look at https://rocket.chat/docs/administrator-guides/integrations/jira on how t
 and https://developer.atlassian.com/jiradev/jira-apis/webhooks#Webhooks-Registeringawebhook on how to set up your Jira part.
 
 for production usage you should set DEBUG to false, or the script will spam your logfile a lot.
+
+
+for rocket.chat slack alternative see https://rocket.chat/
