@@ -1,7 +1,7 @@
 /**
  * @author TheBelgarion@github
  *
- * @version: 1.01
+ * @version: 1.02
  * @summary: script to setup an incoming webhook in rocket.chat for jira export webhook
  *
  * * jshint  esnext:true
@@ -40,7 +40,6 @@ class Script {
             let issue_number = issue.key;
             let issue_title = issue.fields.summary;
             let issue_url = url_origin + '/browse/' + issue_number;
-            let issue_link = '[' + issue_number + '](' + issue_url + ')';
 
             var attachments = [];
             var attachment = {
@@ -51,11 +50,12 @@ class Script {
             };
             attachments.push(attachment);
 
-            var text = '![' + issue_type + '](' + issue_icon + ')' + ' *' + issue_link + '*';
+            var text = '';
+            var issue_link  = this.get_issue_link( url_origin, issue_number, issue_type, issue_icon);
 
             switch (request.content.webhookEvent) {
                 case 'jira:issue_created':
-                    text = 'issue created ' + text;
+                    text = 'issue created ' + issue_link;
                     if (issue.fields.creator) {
                         attachment.fields.push({
                             title: 'creator',
@@ -65,7 +65,7 @@ class Script {
                     }
                     break;
                 case 'jira:issue_updated':
-                    text = 'issue updated ' + text;
+                    text = 'issue updated ' + issue_link;
                     let items = this.get_action_items(request);
                     let item = null;
                     for (let i = 0; i < items.length; ++i) {
@@ -88,14 +88,6 @@ class Script {
                                 });
                                 break;
 
-                            case 'jira:labels':
-                                attachment.fields.push({
-                                    title: item.item.field,
-                                    value: item.item.toString,
-                                    short: true
-                                });
-                                break;
-
                             case 'jira:description':
                                 attachment.fields.push({
                                     title: item.item.field,
@@ -112,15 +104,11 @@ class Script {
                                 });
                                 break;
 
-                            case 'custom:sprint':
-                                attachment.fields.push({
-                                    title: item.item.field,
-                                    value: 'changed' + item.item.fromString + ' to ' + item.item.toString,
-                                    short: true
-                                });
-                                break;
-
+                            case 'jira:issuetype':
                             case 'jira:fix version':
+                            case 'jira:labels':
+                            case 'custom:acceptance criteria':
+                            case 'custom:environment':
                                 if (item.item.toString != '') {
                                     attachment.fields.push({
                                         title: item.item.field,
@@ -130,13 +118,25 @@ class Script {
                                 }
                                 break;
 
-                            case 'jira:priority':
+                            case 'jira:project':
+                                text = 'issue moved to ' + item.item.toString + ' ' + issue_link;
+                                break;
+
+                            case 'jira:key':
                                 attachment.fields.push({
-                                    title: item.item.field,
-                                    value: 'changed' + item.item.fromString + ' to ' + item.item.toString,
+                                    title: 'old key',
+                                    value: item.item.fromString,
                                     short: true
                                 });
+                                break;
 
+                            case 'jira:priority':
+                            case 'custom:sprint':
+                                attachment.fields.push({
+                                    title: item.item.field,
+                                    value: item.item.fromString + ' => ' + item.item.toString,
+                                    short: true
+                                });
                                 break;
 
                             case 'jira:attachment':
@@ -149,14 +149,6 @@ class Script {
                                 }
                                 break;
 
-                            case 'custom:acceptance criteria':
-                                attachment.fields.push({
-                                    title: item.item.field,
-                                    value: item.item.toString,
-                                    short: true
-                                });
-                                break;
-
                             case 'jira:summary':
                                 // summary already shown
                                 break;
@@ -164,8 +156,10 @@ class Script {
                             case 'jira:timeestimate':
                             case 'jira:timespent':
                             case 'jira:worklogid':
+                            case 'jira:workflow':
                             case 'custom:lest link':
                             case 'custom:epic status':
+                            case 'custom:epic name':
                             case 'custom:rank':
                                 if (DEBUG) {
                                     attachment.fields.push({
@@ -173,18 +167,18 @@ class Script {
                                         value: item.value,
                                         short: true
                                     });
-                                } else {
-                                    return false;
                                 }
                                 break;
                             default:
                                 if (DEBUG) {
                                     item.title = 'unknown action';
                                     attachment.fields.push(item);
-                                } else {
-                                    return false;
                                 }
                         }
+                    }
+                    // no known actions found, dont show
+                    if (attachment.fields.length == 0) {
+                        return false;
                     }
                     break;
 
@@ -266,7 +260,9 @@ class Script {
             item = jira_items[i];
             if (item.fromString != item.toString) {
                 action = item.fieldtype + ':' + item.field;
-
+                item.fromString = (null == item.fromString ? '' : item.fromString);
+                item.toString =  (null == item.toString ? '' : item.toString);
+                item.field = item.field.toLowerCase();
                 items.push({
                     title: 'action',
                     value: action.toLowerCase(),
@@ -276,6 +272,11 @@ class Script {
             }
         }
         return items;
+    }
+
+    get_issue_link(base_url, issue, type, icon) {
+        let link = '[' + issue + '](' + base_url + '/browse/' + issue + ')';
+        return ('![' + type + '](' + icon + ')' + ' *' + link + '*');
     }
 
     get_attachment(issue, id) {
