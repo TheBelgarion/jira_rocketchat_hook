@@ -1,15 +1,20 @@
 /**
  * @author TheBelgarion@github
  *
- * @version: 1.02
+ * @version: 1.05
  * @summary: script to setup an incoming webhook in rocket.chat for jira export webhook
  *
  * * jshint  esnext:true
  *
  */
 class Script {
+
     process_incoming_request({request}) {
+        const DEBUG = false;
         if (!(request.content && request.content.webhookEvent)) {
+            if (DEBUG) {
+                return { content: { text : 'No WebHook Event found ' + JSON.stringify(request.content)}};
+            }
             return {
                 error: {
                     success: false,
@@ -18,8 +23,7 @@ class Script {
             };
         }
 
-        const DEBUG = true;
-        const MAXLENGTH = 500;
+        const MAXLENGTH = 1500;
 
         let channel = false;
 
@@ -27,19 +31,61 @@ class Script {
             channel = '#' + request.url.query.channel;
         }
         try {
-            let issue = request.content.issue;
-            let comment = request.content.comment;
-            let ref_url = issue.self;
+
+            let comment = false;
+            let ref_url = '';
+            let issue = '';
+            ref_url = '';
+            let user_login = '';
+            let user_name = '';
+            let avatar_url = '';
+            let issue_type = '';
+            let issue_icon = '';
+            let issue_number = '';
+            let issue_title = '';
+            let issue_url = '';
+            let name = '';
+            switch (request.content.webhookEvent) {
+                case 'jira:issue_created':
+                case 'jira:issue_deleted':
+                case 'jira:issue_updated':
+                    issue = request.content.issue;
+                    ref_url = issue.self;
+                    user_login = request.content.user.name;
+                    user_name = request.content.user.displayName;
+                    avatar_url = request.content.user.avatarUrls["16x16"];
+                    issue_type = issue.fields.issuetype.name;
+                    issue_icon = issue.fields.issuetype.iconUrl;
+                    issue_number = issue.key;
+                    issue_title = issue.fields.summary;
+                    issue_url = url_origin + '/browse/' + issue_number;
+                    comment = request.content.comment;
+                    break;
+                case 'comment_created':
+                case 'comment_updated':
+                    comment = request.content.comment;
+                    ref_url = comment.self;
+                    // ignore event for now, because there is no direct link to an issue
+                    return true;
+                default:
+                    if (DEBUG) {
+                        attachment.fields.push({
+                            title: 'unknown web hook event',
+                            value: request.content.webhookEvent,
+                            short: true
+                        });
+                        attachment.fields.push({
+                            title: 'issue',
+                            value: issue.fields.summary,
+                            short: true
+                        })
+                        ;
+                    } else {
+                        return false;
+                    }
+            }
             let url_parts = /^(\w+\:\/\/)?([^\/]+)(.*)$/.exec(ref_url);
             let url_origin = url_parts[1] + url_parts[2];
-            let user_login = request.content.user.name;
-            let user_name = request.content.user.displayName;
-            let avatar_url = request.content.user.avatarUrls["16x16"];
-            let issue_type = issue.fields.issuetype.name;
-            let issue_icon = issue.fields.issuetype.iconUrl;
-            let issue_number = issue.key;
-            let issue_title = issue.fields.summary;
-            let issue_url = url_origin + '/browse/' + issue_number;
 
             var attachments = [];
             var attachment = {
@@ -58,8 +104,19 @@ class Script {
                     text = 'issue created ' + issue_link;
                     if (issue.fields.creator) {
                         attachment.fields.push({
-                            title: 'creator',
-                            value: issue.fields.creator.displayName,
+                            title: 'created by',
+                            value: this.get(issue,'fields.creator.displayName'),
+                            short: true
+                        });
+                    }
+                    break;
+                case 'jira:issue_deleted':
+                    text = 'issue deleted ' + issue_link;
+                    /** @todo: check which field is set for the deletor **/
+                    if (issue.fields.creator) {
+                        attachment.fields.push({
+                            title: 'deleted by',
+                            value: this.get(issue,'fields.creator.displayName'),
                             short: true
                         });
                     }
@@ -73,9 +130,12 @@ class Script {
                         switch (item.value) {
 
                             case 'jira:assignee':
+                                if(issue.fields.assignee == null) {
+                                    name = 'Unassigned';
+                                } else name = this.get(issue, 'fields.assignee.displayName');
                                 attachment.fields.push({
                                     title: item.item.field,
-                                    value: issue.fields.assignee.displayName,
+                                    value: name,
                                     short: true
                                 });
                                 break;
@@ -108,6 +168,7 @@ class Script {
                             case 'jira:fix version':
                             case 'jira:labels':
                             case 'custom:acceptance criteria':
+                            case 'custom:story points':
                             case 'custom:environment':
                                 if (item.item.toString != '') {
                                     attachment.fields.push({
@@ -142,11 +203,20 @@ class Script {
                             case 'jira:attachment':
                                 let att = this.get_attachment(issue, item.item.to);
                                 if (att) {
-                                    attachment.text = 'attachment';
+                                    attachment.fields.push({
+                                        title: 'Attachment',
+                                        value: 'added',
+                                        short: true
+                                    });
                                     if (/^image/i.test(att.mimeType)) {
                                         attachment.image_url = url_origin + att.image;
                                     }
-                                }
+                                } else {
+                                    attachment.fields.push({
+                                        title: 'Attachment',
+                                        value: 'deleted',
+                                        short: true
+                                    });                                    }
                                 break;
 
                             case 'jira:summary':
@@ -177,12 +247,14 @@ class Script {
                         }
                     }
                     // no known actions found, dont show
-                    if (attachment.fields.length == 0) {
-                        return false;
+                    if (attachment.fields.length == 0 && !comment ) {
+                        return true;
                     }
                     break;
 
-                // ignored web events
+                    // ignored web events
+                case 'comment_created':
+                case 'comment_updated':
                 case 'jira:worklog_updated':
                     if (DEBUG) {
                         attachment.fields.push({
@@ -191,7 +263,7 @@ class Script {
                             short: true
                         });
                     } else {
-                        return false;
+                        return true;
                     }
                     break;
                 default:
@@ -212,16 +284,44 @@ class Script {
                     }
             }
             if (comment) {
-                attachment = {
-                    author_icon: comment.author.avatarUrls['48x48'],
-                    author_name: comment.author.displayName + ' added a comment',
-                    text: this.comment(comment.body, MAXLENGTH)
-                };
+                let comm = this.comment(comment.body, MAXLENGTH);
+                if(request.content.issue_event_type_name == 'issue_comment_edited') {
+                    attachment = {
+                        author_icon: comment.updateAuthor.avatarUrls['48x48'],
+                        author_name: this.get(comment, 'updateAuthor.displayName') + ' edited a comment',
+                        text: comm.text,
+                        link_names: 1
+                    };
+
+                } else {
+                    attachment = {
+                        author_icon: comment.author.avatarUrls['48x48'],
+                        author_name: this.get(comment, 'author.displayName') + ' added a comment',
+                        text: comm.text,
+                        link_names: 1
+                    };
+                }
+
+                if (comm.mentions.length > 0) {
+                    var mem = ' (mentions ';
+                        comm.mentions.forEach(
+                        function (user) {
+                            mem = mem + user  + ', ';
+                        }
+                    );
+                    // disabled because it automatically invites all mentioned to the room
+                    // text = text + mem.substr(0,mem.length-2) + ')';
+                }
                 attachments.push(attachment);
 
             }
         } catch (e) {
-            console.log('webhook event error', e);
+            if (DEBUG) {
+                console.log('error ' + JSON.stringify(request.content));
+                return { content: { text : 'webhook event error ' + e + ' ' + JSON.stringify(request.content)}};
+            } else {
+                console.log('webhook event error', e);
+            }
             return {
                 error: {
                     success: false,
@@ -229,16 +329,12 @@ class Script {
                 }
             };
         }
-
-        if (DEBUG) {
-            console.log(JSON.stringify(request.content));
-        }
         var result = {
             content: {
                 alias: 'JIRA',
                 text: text,
                 attachments: attachments,
-                link_names: true
+                link_names: 1
             }
         };
         // send to other channel than predefined on script
@@ -306,13 +402,37 @@ class Script {
         return users;
     }
 
+    get(obj, prop) {
+        let value = '';
+        try {
+           value = prop.split('.').reduce(function(p, c) {
+           return (p.hasOwnProperty(c) && p[c]) || null;
+           }, obj);
+       } catch (e) {
+            console.log('property ', prop , ' not found.');
+            return false;
+       }
+        return value;
+    }
+
     comment(text, length) {
+        // link users only works correct if you use same user e.g. LDAP on JIRA and Rocketchat
+        let mention = text.match(/\[~(\w*\.\w*)]/g);
+        var mentions = [];
+        if (mention != null) {
+            mention.forEach(
+                function (user) {
+                    mentions.push(user.replace(/(\[~)(\w*\.\w*)(])/g, "@$2"));
+                }
+            );
+        }
+        // code blocks like php, sql
+        text = text.replace(/\{code\[:]*(\w*)}([\.\W\S]*)\{code}/g, "```$1$2```");
+        text = text.replace(/(\r)/g, '');
         if (text.length > length) {
             let s = text.substr(0, length - 1);
             text = text.substr(0, s.lastIndexOf(' ')) + '\n...';
         }
-        // link users only works correct with you use same user e.g. LDAP on JIRA and Rocketchat
-        text = text.replace(/(\[\~)(\w\.\w*)(\])/g, "@$2");
-        return text;
+        return {'text': text, 'mentions': mentions};
     }
 }
