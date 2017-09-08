@@ -32,34 +32,32 @@ class Script {
         }
         try {
 
-            let comment = false;
-            let ref_url = '';
             let issue = '';
-            ref_url = '';
-            let user_login = '';
-            let user_name = '';
-            let avatar_url = '';
+            let name = '';
             let issue_type = '';
             let issue_icon = '';
             let issue_number = '';
             let issue_title = '';
+            let comment = false;
+            let user_login = '';
+            let user_name = '';
+            let ref_url = '';
             let issue_url = '';
-            let name = '';
+            let avatar_url = '';
             switch (request.content.webhookEvent) {
                 case 'jira:issue_created':
                 case 'jira:issue_deleted':
                 case 'jira:issue_updated':
                     issue = request.content.issue;
-                    ref_url = issue.self;
-                    user_login = request.content.user.name;
-                    user_name = request.content.user.displayName;
-                    avatar_url = request.content.user.avatarUrls["16x16"];
                     issue_type = issue.fields.issuetype.name;
                     issue_icon = issue.fields.issuetype.iconUrl;
                     issue_number = issue.key;
                     issue_title = issue.fields.summary;
-                    issue_url = url_origin + '/browse/' + issue_number;
+                    user_login = request.content.user.name;
+                    user_name = request.content.user.displayName;
                     comment = request.content.comment;
+                    ref_url = issue.self;
+                    avatar_url = request.content.user.avatarUrls["16x16"];
                     break;
                 case 'comment_created':
                 case 'comment_updated':
@@ -84,9 +82,10 @@ class Script {
                         return false;
                     }
             }
+
             let url_parts = /^(\w+\:\/\/)?([^\/]+)(.*)$/.exec(ref_url);
             let url_origin = url_parts[1] + url_parts[2];
-
+            issue_url = url_origin + '/browse/' + issue_number;
             var attachments = [];
             var attachment = {
                 author_icon: issue_icon,
@@ -248,11 +247,11 @@ class Script {
                     }
                     // no known actions found, dont show
                     if (attachment.fields.length == 0 && !comment ) {
-                        return true;
+                        return false;
                     }
                     break;
 
-                    // ignored web events
+                // ignored web events
                 case 'comment_created':
                 case 'comment_updated':
                 case 'jira:worklog_updated':
@@ -304,7 +303,7 @@ class Script {
 
                 if (comm.mentions.length > 0) {
                     var mem = ' (mentions ';
-                        comm.mentions.forEach(
+                    comm.mentions.forEach(
                         function (user) {
                             mem = mem + user  + ', ';
                         }
@@ -318,9 +317,13 @@ class Script {
         } catch (e) {
             if (DEBUG) {
                 console.log('error ' + JSON.stringify(request.content));
-                return { content: { text : 'webhook event error ' + e + ' ' + JSON.stringify(request.content)}};
             } else {
                 console.log('webhook event error', e);
+
+            }
+
+            if (DEBUG) {
+                return { content: { text : 'webhook event error ' + e + ' ' + JSON.stringify(request.content)}};
             }
             return {
                 error: {
@@ -405,13 +408,13 @@ class Script {
     get(obj, prop) {
         let value = '';
         try {
-           value = prop.split('.').reduce(function(p, c) {
-           return (p.hasOwnProperty(c) && p[c]) || null;
-           }, obj);
-       } catch (e) {
+            value = prop.split('.').reduce(function(p, c) {
+                return (p.hasOwnProperty(c) && p[c]) || null;
+            }, obj);
+        } catch (e) {
             console.log('property ', prop , ' not found.');
             return false;
-       }
+        }
         return value;
     }
 
