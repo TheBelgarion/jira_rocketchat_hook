@@ -1,7 +1,7 @@
 /**
  * @author TheBelgarion@github
  *
- * @version: 1.05
+ * @version: 1.07
  * @summary: script to setup an incoming webhook in rocket.chat for jira export webhook
  *
  * * jshint  esnext:true
@@ -27,7 +27,7 @@ class Script {
 
         let channel = false;
 
-        if (request.url.query.channel != '') {
+        if (request.url.query.channel !== '') {
             channel = '#' + request.url.query.channel;
         }
         try {
@@ -129,7 +129,7 @@ class Script {
                         switch (item.value) {
 
                             case 'jira:assignee':
-                                if(issue.fields.assignee == null) {
+                                if(issue.fields.assignee === null) {
                                     name = 'Unassigned';
                                 } else name = this.get(issue, 'fields.assignee.displayName');
                                 attachment.fields.push({
@@ -169,7 +169,7 @@ class Script {
                             case 'custom:acceptance criteria':
                             case 'custom:story points':
                             case 'custom:environment':
-                                if (item.item.toString != '') {
+                                if (item.item.toString !== '') {
                                     attachment.fields.push({
                                         title: item.item.field,
                                         value: item.item.toString,
@@ -246,8 +246,8 @@ class Script {
                         }
                     }
                     // no known actions found, dont show
-                    if (attachment.fields.length == 0 && !comment ) {
-                        return false;
+                    if (attachment.fields.length === 0 && !comment ) {
+                        return true;
                     }
                     break;
 
@@ -284,7 +284,7 @@ class Script {
             }
             if (comment) {
                 let comm = this.comment(comment.body, MAXLENGTH);
-                if(request.content.issue_event_type_name == 'issue_comment_edited') {
+                if(request.content.issue_event_type_name === 'issue_comment_edited') {
                     attachment = {
                         author_icon: comment.updateAuthor.avatarUrls['48x48'],
                         author_name: this.get(comment, 'updateAuthor.displayName') + ' edited a comment',
@@ -316,14 +316,10 @@ class Script {
             }
         } catch (e) {
             if (DEBUG) {
-                console.log('error ' + JSON.stringify(request.content));
+                console.log('webhook event error parsing ' + JSON.stringify(request.content));
+                return { content: { text : 'webhook event error ' + e + ' ' + JSON.stringify(request.content)}};
             } else {
                 console.log('webhook event error', e);
-
-            }
-
-            if (DEBUG) {
-                return { content: { text : 'webhook event error ' + e + ' ' + JSON.stringify(request.content)}};
             }
             return {
                 error: {
@@ -357,10 +353,10 @@ class Script {
         let jira_items = request.content.changelog.items;
         for (let i = 0; i < jira_items.length; ++i) {
             item = jira_items[i];
-            if (item.fromString != item.toString) {
+            if (item.fromString !== item.toString) {
                 action = item.fieldtype + ':' + item.field;
-                item.fromString = (null == item.fromString ? '' : item.fromString);
-                item.toString =  (null == item.toString ? '' : item.toString);
+                item.fromString = (null === item.fromString ? '' : item.fromString);
+                item.toString =  (null === item.toString ? '' : item.toString);
                 item.field = item.field.toLowerCase();
                 items.push({
                     title: 'action',
@@ -382,7 +378,7 @@ class Script {
         let url = false;
         if (issue.fields.attachment) {
             for (let i = 0; i < issue.fields.attachment.length; ++i) {
-                if (issue.fields.attachment[i].id == id) {
+                if (issue.fields.attachment[i].id === id) {
                     url = {
                         image: '/secure/attachment/' + id + '/' + issue.fields.attachment[i].filename,
                         thumb: '/secure/thumbnail/' + id + '/_thumb_' + issue.fields.attachment[i].filename,
@@ -422,7 +418,7 @@ class Script {
         // link users only works correct if you use same user e.g. LDAP on JIRA and Rocketchat
         let mention = text.match(/\[~(\w*\.\w*)]/g);
         var mentions = [];
-        if (mention != null) {
+        if (mention !== null) {
             mention.forEach(
                 function (user) {
                     mentions.push(user.replace(/(\[~)(\w*\.\w*)(])/g, "@$2"));
